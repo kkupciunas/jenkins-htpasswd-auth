@@ -19,6 +19,12 @@
         </license>
     </licenses>
 
+    <scm>
+        <connection>scm:git:git://github.com/kkesha/jenkins-${project.artifactId}.git</connection>
+        <developerConnection>scm:git:git@github.com:kkesha/jenkins-${project.artifactId}.git</developerConnection>
+        <tag>HEAD</tag>
+    </scm>
+
     <repositories>
         <repository>
             <id>repo.jenkins-ci.org</id>
