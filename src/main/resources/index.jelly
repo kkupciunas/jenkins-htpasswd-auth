@@ -1,0 +1,3 @@
+<div>
+  Security realm based on authentication against <i>htpasswd</i> file.
+</div>
