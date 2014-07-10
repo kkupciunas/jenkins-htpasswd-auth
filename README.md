@@ -39,7 +39,7 @@ Usage
 =====
 
 Pretty much straightforward -
-  `Jenkins -> Configure Global Security -> Enable security`
+  `Manage Jenkins -> Configure Global Security -> Enable security`
 
 then there should be **htpasswd** option under `Access Control -> Security Realm` choices.
 
