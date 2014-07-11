@@ -26,7 +26,7 @@ Installation
 Maven (http://maven.apache.org/) is required to build plugin package.
 
 Run
-	`mvn clean package`
+	`mvn -s settings.xml clean package`
 to create plugin .hpi file
 
 Pick up *target/htpasswd-auth.hpi* and install it either by
@@ -60,17 +60,17 @@ Development
 
 Compile & package
 -----------------
-	`mvn clean package`
+	mvn -s settings.xml clean package
 
 Run 
 ---
-	`mvn hpi:run -Djetty.port=9090`
+	mvn -s settings.xml hpi:run -Djetty.port=9090
 
 Debug
 -----
 ```
 export MAVEN_OPTS="-Xdebug -Xrunjdwp:transport=dt_socket,server=y,address=8000,suspend=n"
-mvn hpi:run -Djetty.port=9090
+mvn -s settings.xml hpi:run -Djetty.port=9090
 ```
 
 License
