@@ -29,14 +29,15 @@ import hudson.security.AbstractPasswordBasedSecurityRealm;
 import hudson.security.GroupDetails;
 import hudson.security.SecurityRealm;
 
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.Logger;
 
 import org.acegisecurity.AuthenticationException;
 import org.acegisecurity.BadCredentialsException;
 import org.acegisecurity.GrantedAuthority;
+import org.acegisecurity.GrantedAuthorityImpl;
 import org.acegisecurity.userdetails.User;
 import org.acegisecurity.userdetails.UserDetails;
 import org.acegisecurity.userdetails.UsernameNotFoundException;
@@ -51,16 +52,22 @@ public class HtPasswdSecurityRealm extends AbstractPasswordBasedSecurityRealm {
     private static final Logger logger = Logger.getLogger("htpasswd-security-realm");
 
     private final String htpasswdLocation;
+    private final String htgroupsLocation;
 
     @DataBoundConstructor
-    public HtPasswdSecurityRealm(String htpasswdLocation) {
+    public HtPasswdSecurityRealm(String htpasswdLocation, String htgroupsLocation) {
         this.htpasswdLocation = htpasswdLocation;
+        this.htgroupsLocation = htgroupsLocation;
     }
 
     /**
      */
     public String getHtpasswdLocation() {
         return this.htpasswdLocation;
+    }
+
+    public String getHtgroupsLocation() {
+        return this.htgroupsLocation;
     }
 
     @Extension
@@ -71,69 +78,73 @@ public class HtPasswdSecurityRealm extends AbstractPasswordBasedSecurityRealm {
         }
     }
 
-    private long htpasswdLastModified = 0L;
-    private HtPasswdFile htpasswdFile = null;
-
-    private HtPasswdFile getHtPasswdFile() throws IOException {
-        FileReader reader = null;
-        File f = new File(this.htpasswdLocation);
-
-        // if we cannot access the file for some reason
-        // and have a cached info, return cached info
-        if (!f.exists() || !f.isFile() || !f.canRead()) {
-            if (htpasswdFile != null) {
-                return htpasswdFile;
-            } else {
-                String msg = String.format("File %s is not accessible!",
-                        this.htpasswdLocation);
-                throw new IOException(msg);
-            }
+    private CachedHtFile<HtPasswdFile> cachedHtPasswdFile = null;
+    private HtPasswdFile getHtPasswdFile() throws IOException, ReflectiveOperationException {
+        if (cachedHtPasswdFile == null) {
+            cachedHtPasswdFile = new CachedHtFile<HtPasswdFile>(this.htpasswdLocation, HtPasswdFile.class);
         }
+        return cachedHtPasswdFile.get();
+    }
 
-        // if modification time matches the one recorded earlier -
-        // return cached info
-        if ((f.lastModified() == htpasswdLastModified) && (htpasswdFile != null)) {
-            return htpasswdFile;
+    private CachedHtFile<HtGroupFile> cachedHtGroupsFile = null;
+    private HtGroupFile getHtGroupFile() throws IOException, ReflectiveOperationException {
+        if (cachedHtGroupsFile == null) {
+            cachedHtGroupsFile = new CachedHtFile<HtGroupFile>(this.htgroupsLocation, HtGroupFile.class);
         }
-
-        try {
-            reader = new FileReader(f);
-
-            if (htpasswdFile == null) {
-                htpasswdFile = new HtPasswdFile();
-            } else {
-                htpasswdFile.clear();
-                logger.info("Modification detected on " +
-                        htpasswdLocation + " - reloading...");
-            }
-
-            htpasswdFile.load(reader);
-            htpasswdLastModified = f.lastModified();
-            return htpasswdFile;
-        } catch (IOException ex) {
-            htpasswdLastModified = 0L;
-            htpasswdFile = null;
-            throw ex;
-        } finally {
-            try {
-                if (reader != null)
-                    reader.close();
-            } catch (Exception ignored) {}
-        }
+        return cachedHtGroupsFile.get();
     }
 
     private static final GrantedAuthority DEFAULT_AUTHORITY[] =
             new GrantedAuthority[] { AUTHENTICATED_AUTHORITY };
+    private static final GrantedAuthority GRANTED_AUTHORITY_TYPE[] =
+            new GrantedAuthority[0];
+
+    /**
+     * Retrieves the array of granted authorities for the given user.
+     * It will always contain at least one entry - "authenticated"
+     *
+     * @param username
+     * @return the array of granted authorities, with at least
+     */
+    private GrantedAuthority[] getAuthenticatedUserGroups(final String username) {
+        try {
+            HtGroupFile htgroups = getHtGroupFile();
+            List<String> groups = htgroups.getGroups(username);
+            ArrayList<GrantedAuthority> authorities = new ArrayList<GrantedAuthority>(groups.size() + 1);
+            authorities.add(AUTHENTICATED_AUTHORITY);
+            for (String group : groups) {
+                authorities.add(new GrantedAuthorityImpl(group));
+            }
+            return authorities.toArray(GRANTED_AUTHORITY_TYPE);
+        } catch (Exception ex) {
+            return DEFAULT_AUTHORITY;
+        }
+    }
+
+    private GrantedAuthority[] getUserGroups(final String username) {
+        try {
+            HtGroupFile htgroups = getHtGroupFile();
+            List<String> groups = htgroups.getGroups(username);
+            ArrayList<GrantedAuthority> authorities = new ArrayList<GrantedAuthority>(groups.size());
+            for (String group : groups) {
+                authorities.add(new GrantedAuthorityImpl(group));
+            }
+            return authorities.toArray(GRANTED_AUTHORITY_TYPE);
+        } catch (Exception ex) {
+            return GRANTED_AUTHORITY_TYPE;
+        }
+    }
 
     @Override
-    protected UserDetails authenticate(String username, String password)
+    protected UserDetails authenticate(final String username, final String password)
             throws AuthenticationException {
 
         try {
             HtPasswdFile htpasswd = getHtPasswdFile();
             if (htpasswd.isPasswordValid(username, password)) {
                 return new User(username, password,
-                        true, true, true, true, DEFAULT_AUTHORITY);
+                        true, true, true, true,
+                        getAuthenticatedUserGroups(username));
             }
         } catch (Exception ex) {
             throw new BadCredentialsException(ex.getMessage());
@@ -143,27 +154,40 @@ public class HtPasswdSecurityRealm extends AbstractPasswordBasedSecurityRealm {
     }
 
     @Override
-    public UserDetails loadUserByUsername(String username)
+    public UserDetails loadUserByUsername(final String username)
             throws UsernameNotFoundException, DataAccessException {
-        logger.fine("loadUserByUsername(" + username + ")");
+        logger.finest("loadUserByUsername(" + username + ")");
         try {
             HtPasswdFile htpasswd = getHtPasswdFile();
             String pwEntry = htpasswd.getPassword(username);
             if (pwEntry == null)
                 throw new IllegalStateException("User does not exist");
 
-            return new User(username, "", true, true, true, true, DEFAULT_AUTHORITY);
-        } catch (IOException ex) {
+            return new User(username, "",
+                    true, true, true, true,
+                    getUserGroups(username));
+        } catch (Exception ex) {
             String msg = String.format("Failed to load user '%s'", username);
             throw new UsernameNotFoundException(msg, ex);
         }
     }
 
     @Override
-    public GroupDetails loadGroupByGroupname(String groupname)
+    public GroupDetails loadGroupByGroupname(final String groupname)
             throws UsernameNotFoundException, DataAccessException {
-        logger.fine("loadGroupByGroupname(" +  groupname + ")");
-        throw new UsernameNotFoundException("Group '" + groupname + "' not found.");
+        logger.finest("loadGroupByGroupname(" + groupname + ")");
+        try {
+            HtGroupFile htgroups = getHtGroupFile();
+
+            List<String> users = htgroups.getUsers(groupname);
+            if (users != null && !users.isEmpty()) {
+                return new SimpleGroup(groupname);
+            }
+        } catch (Exception ex) {
+            String msg = String.format("Failed to load group '%s'", groupname);
+            throw new UsernameNotFoundException(msg, ex);
+        }
+        String msg = String.format("Group '%s' not found", groupname);
+        throw new UsernameNotFoundException(msg);
     }
 }
-

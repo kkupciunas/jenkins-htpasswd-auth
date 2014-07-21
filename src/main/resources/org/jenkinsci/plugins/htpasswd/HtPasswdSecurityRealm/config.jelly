@@ -3,4 +3,7 @@
     <f:entry field="htpasswdLocation" title="htpasswd Location">
         <f:textbox/>
     </f:entry>
+    <f:entry field="htgroupsLocation" title="htgroups Location">
+        <f:textbox/>
+    </f:entry>
 </j:jelly>
