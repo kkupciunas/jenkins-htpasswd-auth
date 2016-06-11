@@ -41,17 +41,16 @@ Usage
 Pretty much straightforward -
   `Manage Jenkins -> Configure Global Security -> Enable security`
 
-then there should be **htpasswd** option under `Access Control -> Security Realm` choices.
+then there should be **htpasswd** and **htgroups** Location fields under `Access Control -> Security Realm`.
 
-Specify the location of htpasswd file and you're done. Please note, that there is no UI
-to manage htpasswd file itself, you still have to maintain it using htpasswd utility or
+Specify the location of htpasswd file and you're done. htgroups field is optional. Please note, that there is no UI
+to manage htpasswd/htgroups files itself, you still have to maintain them using htpasswd utility or
 whatever other means you used to do it before.
 
 
 TODO
 ====
  - bcrypt support (htpasswd uses $2y$ salt revision, jbcrypt doesn't like it..)
- - htgroup support (parsing code is there, just need to plug it into SecurityRealm)
  - multiple htpasswd file (combined) support (undecided on that one yet)
 
 
@@ -78,7 +77,7 @@ License
 
   The MIT License
  
-  Copyright (c) 2014, Kestutis Kupciunas (aka kesha)
+  Copyright (c) 2014-2016, Kestutis Kupciunas (aka kesha)
  
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
